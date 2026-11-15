@@ -506,3 +506,198 @@
                 statusSpan.style.fontWeight = 'bold';
                 statusSpan.style.color = '#16a34a';
                 statusSpan.textContent = '✔️ Deducted';
+actionsDiv.appendChild(statusSpan);
+            }
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.textContent = '✏️ Edit';
+            editBtn.onclick = () => editNote(note.id);
+        // Calculate current month's analytics (with elapsed days & uncapped percentage)
+        const now = new Date();
+        let monthIncome = 0;
+        let monthSpending = 0;
+        
+        transactions.forEach((tx) => {
+            const txDate = new Date(tx.date + 'T00:00:00');
+            if (txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear()) {
+                if (tx.type === 'income') monthIncome += tx.amount;
+                else monthSpending += tx.amount;
+            }
+        });
+
+        // 1. Uncapped percentage (allows values > 100% when overspending)
+        const pctSpent = monthIncome > 0 ? Math.round((monthSpending / monthIncome) * 100) : 0;
+
+        // 2. Use elapsed days so far this month (at least 1 day to avoid division by zero)
+        const elapsedDays = Math.max(1, now.getDate());
+        const avgDaily = monthSpending / elapsedDays;
+
+        const remaining = monthIncome - monthSpending;
+
+        // Update UI
+        document.getElementById('analytics-pct-spent').textContent = `${pctSpent}%`;
+        document.getElementById('analytics-avg-daily').textContent = `E${avgDaily.toFixed(2)}`;
+        const remEl = document.getElementById('analytics-remaining');
+        remEl.textContent = `${remaining < 0 ? '-' : ''}E${Math.abs(remaining).toFixed(2)}`;
+        remEl.className = remaining >= 0 ? 'surplus' : 'deficit';
+file:///data/user/0/com.foxdebug.acodefree/files/public/mommy.html
+            const delBtn = document.createElement('button');
+            delBtn.className = 'delete-btn';
+            delBtn.textContent = '✕';
+            delBtn.onclick = () => deleteNote(note.id);
+
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(delBtn);
+
+            noteItem.appendChild(detailsDiv);
+            noteItem.appendChild(actionsDiv);
+            notesContainer.appendChild(noteItem);
+        });
+
+        if (notesContainer.innerHTML === '') {
+            notesContainer.innerHTML = '<p style="color: #94a3b8; font-size: 14px; text-align: center; margin: 10px 0;">No notes saved yet.</p>';
+        }
+
+        // Render Transactions
+        transactions.sort((a, b) => new Date(b.date + 'T00:00:00') - new Date(a.date + 'T00:00:00'));
+        transactions.forEach((tx) => {
+            const txDate = new Date(tx.date + 'T00:00:00');
+            const txFreq = tx.frequency || 'daily';
+            let include = false;
+
+            if (currentFilter === 'all') {
+                include = true;
+            } else if (currentFilter === 'daily') {
+                include = (txFreq === 'daily') && (txDate.toDateString() === now.toDateString());
+            } else if (currentFilter === 'weekly') {
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(now.getDate() - 7);
+                oneWeekAgo.setHours(0, 0, 0, 0);
+                include = (txFreq === 'daily') && (txDate >= oneWeekAgo);
+            } else if (currentFilter === 'monthly') {
+                include = txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+            }
+
+            if (include) {
+                if (tx.type === 'income') totalEarnings += tx.amount;
+                else totalSpending += tx.amount;
+
+                const item = document.createElement('div');
+                item.className = 'log-item';
+
+                const detailsDiv = document.createElement('div');
+                detailsDiv.className = 'item-details';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'item-name';
+                nameSpan.textContent = tx.description;
+
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'item-date';
+                dateSpan.textContent = `📅 ${txDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+                detailsDiv.appendChild(nameSpan);
+                detailsDiv.appendChild(dateSpan);
+
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'item-actions';
+
+                const amountSpan = document.createElement('span');
+                amountSpan.className = tx.type === 'income' ? 'surplus' : 'deficit';
+                amountSpan.style.fontWeight = 'bold';
+                const prefix = tx.type === 'income' ? '+' : '-';
+                amountSpan.textContent = `${prefix}E${tx.amount.toFixed(2)}`;
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.textContent = '✕';
+                delBtn.onclick = () => deleteTransaction(tx.id);
+
+                actionsDiv.appendChild(amountSpan);
+                actionsDiv.appendChild(delBtn);
+item.appendChild(detailsDiv);
+                item.appendChild(actionsDiv);
+                logContainer.appendChild(item);
+            }
+        });
+
+        document.getElementById('total-earnings').textContent = `E${totalEarnings.toFixed(2)}`;
+        document.getElementById('total-spending').textContent = `E${totalSpending.toFixed(2)}`;
+        
+        const net = totalEarnings - totalSpending;
+        const netEl = document.getElementById('net-balance');
+        netEl.textContent = `${net < 0 ? '-' : ''}E${Math.abs(net).toFixed(2)}`;
+        netEl.className = net >= 0 ? 'surplus' : 'deficit';
+    }
+
+    function exportData() {
+        const fullBackup = { transactions, notes };
+        const dataStr = JSON.stringify(fullBackup, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ledger-and-notes-backup-${localISODate}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function importData(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    transactions = imported.map((item, idx) => ({ ...item, id: item.id || Date.now() + idx }));
+                } else if (imported && typeof imported === 'object') {
+                    transactions = (imported.transactions || []).map((item, idx) => ({ ...item, id: item.id || Date.now() + idx }));
+                    notes = (imported.notes || []).map((item, idx) => ({ ...item, id: item.id || Date.now() + idx }));
+                }
+                saveAndRender();
+                alert('Backup restored successfully!');
+            } catch (err) {
+                alert('Error reading backup file.');
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+        // Calculate current month's specific analytics
+        let monthIncome = 0;
+        let monthSpending = 0;
+        let daysInMonthCount = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        
+        transactions.forEach((tx) => {
+            const txDate = new Date(tx.date + 'T00:00:00');
+            if (txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear()) {
+                if (tx.type === 'income') monthIncome += tx.amount;
+                else monthSpending += tx.amount;
+            }
+        });
+
+        // Compute metrics
+        const pctSpent = monthIncome > 0 ? Math.min(100, Math.round((monthSpending / monthIncome) * 100)) : 0;
+        const avgDaily = monthSpending / daysInMonthCount;
+        const remaining = monthIncome - monthSpending;
+
+        // Update the UI elements safely
+        document.getElementById('analytics-pct-spent').textContent = `${pctSpent}%`;
+        document.getElementById('analytics-avg-daily').textContent = `E${avgDaily.toFixed(2)}`;
+        const remEl = document.getElementById('analytics-remaining');
+        remEl.textContent = `${remaining < 0 ? '-' : ''}E${Math.abs(remaining).toFixed(2)}`;
+        remEl.className = remaining >= 0 ? 'surplus' : 'deficit';
+
+    updateApp();
+  
+</script>
+
+                        
+</script>
+
+
+</body>
+</html>
